@@ -1,7 +1,11 @@
 from shapely.geometry import mapping  # для преобразования геометрии в GeoJSON-подобный dict
 from app.dto.dto import *
 from app.services.services import coords_to_linestring, coord_to_point
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from app.dependecies.db import get_session
+from app.models.HeatLine import HeatlineSegment
+from sqlalchemy.ext.asyncio import AsyncSession
+
 
 geo_router = APIRouter(tags=["geo"])
 
@@ -13,18 +17,26 @@ def root():
 
 
 @geo_router.post("/routes/generate", response_model=GenerateRouteResponse)
-def generate_route(payload: GenerateRouteRequest):
-    """
-    Построить линию теплотрассы по набору точек и вернуть её длину.
-    """
-    line = coords_to_linestring(payload.points) 
+async def generate_route(
+    payload: GenerateRouteRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    line = coords_to_linestring(payload.points)
     length = line.length
+    geojson_line = mapping(line)
+    segment = HeatlineSegment(
+        geometry=geojson_line,
+        length=length
+    )
 
-    geojson_line = mapping(line)  # {"type": "LineString", "coordinates": [...]}
+    session.add(segment)
+    await session.commit()
+    await session.refresh(segment)
 
     return GenerateRouteResponse(
+        id=segment.id,
         length=length,
-        geometry=geojson_line,
+        geometry=geojson_line
     )
 
 

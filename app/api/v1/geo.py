@@ -1,10 +1,21 @@
-from shapely.geometry import mapping  # для преобразования геометрии в GeoJSON-подобный dict
-from app.dto.dto import *
-from app.services.services import coords_to_linestring, coord_to_point
-from fastapi import APIRouter, Depends
-from app.dependecies.db import get_session
-from app.models.HeatLine import HeatlineSegment
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from shapely.geometry import mapping, shape, Point
+from shapely.ops import unary_union
+
+from app.dependecies.db import get_session
+from app.dto.dto import (
+    GenerateRouteRequest,
+    GenerateRouteResponse,
+    BufferRequest,
+    BufferResponse,
+    HouseRequest
+)
+from app.models.HeatLine import HeatlineSegment, HeatlineBuffer
+from app.services.services import coords_to_linestring
+
 
 
 geo_router = APIRouter(tags=["geo"])
@@ -41,43 +52,63 @@ async def generate_route(
 
 
 @geo_router.post("/routes/buffer", response_model=BufferResponse)
-def build_buffer(payload: BufferRequest):
-    """
-    Построить буфер (зону обслуживания) вокруг линии теплотрассы.
-    """
-    line = coords_to_linestring(payload.points)
-    buffer_poly = line.buffer(payload.distance)
+async def generate_buffer(
+    payload: BufferRequest,
+    session: AsyncSession = Depends(get_session)
+):
+    result = await session.execute(select(HeatlineSegment))
+    segments = result.scalars().all()
 
-    area = buffer_poly.area
-    geojson_polygon = mapping(buffer_poly)  # {"type": "Polygon", ...}
+    if not segments:
+        raise HTTPException(400, "Нет сохранённых участков теплотрассы")
+
+    lines = [shape(seg.geometry) for seg in segments]
+
+    merged = unary_union(lines)
+
+    buffer_polygon = merged.buffer(payload.distance)
+
+    geojson_buffer = mapping(buffer_polygon)
+
+    buffer_obj = HeatlineBuffer(
+        geometry=geojson_buffer,
+        distance=payload.distance
+    )
+
+    session.add(buffer_obj)
+    await session.commit()
+    await session.refresh(buffer_obj)
 
     return BufferResponse(
+        id=buffer_obj.id,
         distance=payload.distance,
-        area=area,
-        geometry=geojson_polygon,
+        geometry=geojson_buffer
     )
 
 
-@geo_router.post("/routes/check-house", response_model=HouseCheckResponse)
-def check_house(payload: HouseCheckRequest):
-    """
-    Проверить, попадает ли дом в зону обслуживания теплотрассы
-    с заданным радиусом max_distance.
-    """
-    line = coords_to_linestring(payload.line_points)
-    house_point = coord_to_point(payload.house)
 
-    distance = line.distance(house_point)
-    in_service_zone = distance <= payload.max_distance
-
-    service_zone = line.buffer(payload.max_distance)
-
-    house_geojson = mapping(house_point)
-    zone_geojson = mapping(service_zone)
-
-    return HouseCheckResponse(
-        in_service_zone=in_service_zone,
-        distance=distance,
-        house_geometry=house_geojson,
-        service_zone_geometry=zone_geojson,
+@geo_router.post("/routes/check-house")
+async def check_house(
+    payload: HouseRequest,
+    session: AsyncSession = Depends(get_session)
+):
+    result = await session.execute(
+        select(HeatlineBuffer).order_by(HeatlineBuffer.id.desc())
     )
+    buffer_obj = result.scalars().first()
+
+    if not buffer_obj:
+        raise HTTPException(400, "Буфер ещё не создан. Вызовите /routes/buffer")
+
+    buffer_poly = shape(buffer_obj.geometry)
+    house_point = Point(payload.x, payload.y)
+
+    in_zone = buffer_poly.contains(house_point)
+
+    distance = buffer_poly.distance(house_point)
+
+    return {
+        "in_service_zone": in_zone,
+        "distance_to_zone": distance,
+        "buffer_id": buffer_obj.id
+    }

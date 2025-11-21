@@ -27,38 +27,19 @@ class GenerateRouteResponse(BaseModel):
 
 
 class BufferRequest(BaseModel):
-    points: List[Coord] = Field(
-        ..., min_items=2,
-        description="Линия теплотрассы как список точек",
-    )
-    distance: float = Field(
-        ..., gt=0,
-        description="Радиус буфера вокруг линии",
-    )
+    distance: float = Field(..., gt=0)
 
 
 class BufferResponse(BaseModel):
-    distance: float = Field(..., description="Использованный радиус буфера")
-    area: float = Field(..., description="Площадь буфера (в условных единицах)")
-    geometry: dict[str, Any] = Field(
-        ..., description="GeoJSON-представление Polygon (буфер вокруг линии)"
-    )
+    id: int
+    distance: float
+    geometry: dict
 
 
-class HouseCheckRequest(BaseModel):
-    line_points: List[Coord] = Field(
-        ..., min_items=2,
-        description="Линия теплотрассы как список точек",
-    )
-    house: Coord = Field(
-        ..., description="Координаты дома",
-    )
-    max_distance: float = Field(
-        50.0,
-        gt=0,
-        description="Максимальное расстояние от теплотрассы до дома, "
-                    "чтобы считать дом подключаемым",
-    )
+class HouseRequest(BaseModel):
+    x: float
+    y: float
+
 
 
 class HouseCheckResponse(BaseModel):

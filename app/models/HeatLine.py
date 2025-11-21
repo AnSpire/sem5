@@ -10,3 +10,13 @@ class HeatlineSegment(Base):
     geometry = Column(JSONB, nullable=False)
     length = Column(Float, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
+
+
+
+class HeatlineBuffer(Base):
+    __tablename__ = "heatline_buffers"
+
+    id = Column(Integer, primary_key=True)
+    distance = Column(Float, nullable=False)  
+    geometry = Column(JSONB, nullable=False)  
+    created_at = Column(DateTime, server_default=func.now())

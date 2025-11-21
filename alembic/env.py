@@ -3,7 +3,7 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, create_engine
 from sqlalchemy import pool
 from app.models.Base import Base
-from app.models.HeatLine import HeatlineSegment
+from app.models.HeatLine import HeatlineSegment, HeatlineBuffer
 from alembic import context
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

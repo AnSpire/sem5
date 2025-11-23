@@ -10,5 +10,5 @@ app: FastAPI = FastAPI(
     description="Простое демо FastAPI + Shapely для работы с теплотрассами и домами",
     version="0.1.0",
 )
-app.include_router(geo_router)
+app.include_router(geo_router, prefix="/geo")
 

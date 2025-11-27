@@ -6,6 +6,7 @@ from shapely.geometry import mapping, shape, Point
 from shapely.ops import unary_union
 
 from app.dependecies.db import get_session
+from app.dependecies.geo import get_geo_service
 from app.dto.dto import (
     GenerateRouteRequest,
     GenerateRouteResponse,
@@ -15,8 +16,7 @@ from app.dto.dto import (
 )
 from app.models.HeatLine import HeatlineSegment, HeatlineBuffer
 from app.services.services import coords_to_linestring
-
-
+from app.services.geo import GeoService
 
 geo_router = APIRouter(tags=["geo"])
 
@@ -30,26 +30,10 @@ def root():
 @geo_router.post("/routes/generate", response_model=GenerateRouteResponse)
 async def generate_route(
     payload: GenerateRouteRequest,
-    session: AsyncSession = Depends(get_session),
+    service: GeoService = Depends(get_geo_service)
 ):
-    line = coords_to_linestring(payload.points)
-    length = line.length
-    geojson_line = mapping(line)
-    segment = HeatlineSegment(
-        geometry=geojson_line,
-        length=length
-    )
-
-    session.add(segment)
-    await session.commit()
-    await session.refresh(segment)
-
-    return GenerateRouteResponse(
-        id=segment.id,
-        length=length,
-        geometry=geojson_line
-    )
-
+    response = await service.generate_route(payload.points)
+    return response
 
 @geo_router.post("/routes/buffer", response_model=BufferResponse)
 async def generate_buffer(

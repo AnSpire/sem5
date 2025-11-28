@@ -38,37 +38,10 @@ async def generate_route(
 @geo_router.post("/routes/buffer", response_model=BufferResponse)
 async def generate_buffer(
     payload: BufferRequest,
-    session: AsyncSession = Depends(get_session)
+    service: GeoService = Depends(get_geo_service)
 ):
-    result = await session.execute(select(HeatlineSegment))
-    segments = result.scalars().all()
-
-    if not segments:
-        raise HTTPException(400, "Нет сохранённых участков теплотрассы")
-
-    lines = [shape(seg.geometry) for seg in segments]
-
-    merged = unary_union(lines)
-
-    buffer_polygon = merged.buffer(payload.distance)
-
-    geojson_buffer = mapping(buffer_polygon)
-
-    buffer_obj = HeatlineBuffer(
-        geometry=geojson_buffer,
-        distance=payload.distance
-    )
-
-    session.add(buffer_obj)
-    await session.commit()
-    await session.refresh(buffer_obj)
-
-    return BufferResponse(
-        id=buffer_obj.id,
-        distance=payload.distance,
-        geometry=geojson_buffer
-    )
-
+    response = await service.generate_buffer(payload.distance)
+    return response
 
 
 @geo_router.post("/routes/check-house")

@@ -94,3 +94,47 @@ async def test_generate_buffer(test_session: AsyncSession):
     assert buffer_obj is not None
     assert buffer_obj.distance == 5.0
     assert buffer_obj.geometry["type"] == "Polygon"
+
+
+
+@pytest.mark.asyncio
+async def test_check_house(test_session):
+    segment = HeatlineSegment(
+        geometry={"type": "LineString", "coordinates": [[0, 0], [10, 0]]},
+        length=10.0
+    )
+    test_session.add(segment)
+    await test_session.commit()
+    await test_session.refresh(segment)
+
+    buffer_payload = {"distance": 5.0}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        buffer_response = await ac.post("/routes/buffer", json=buffer_payload)
+
+    assert buffer_response.status_code == 200
+    buffer_data = buffer_response.json()
+    buffer_id = buffer_data["id"]
+
+    house_payload = {"x": 5, "y": 1}
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test"
+    ) as ac:
+        resp = await ac.post("/routes/check-house", json=house_payload)
+
+    assert resp.status_code == 200
+
+    data = resp.json()
+
+    assert "in_service_zone" in data
+    assert "distance_to_zone" in data
+    assert "buffer_id" in data
+
+    assert data["buffer_id"] == buffer_id
+    assert data["in_service_zone"] is True
+    assert data["distance_to_zone"] == 0.0

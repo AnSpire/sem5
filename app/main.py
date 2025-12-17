@@ -3,7 +3,7 @@ from shapely.geometry import mapping  # для преобразования ге
 from app.dto.dto import *
 from app.services.services import coords_to_linestring, coord_to_point
 from app.api.v1.geo import geo_router
-
+from app.api.v1.map import map_router
 
 app: FastAPI = FastAPI(
     title="Heatlines Playground API",
@@ -11,4 +11,5 @@ app: FastAPI = FastAPI(
     version="0.1.0",
 )
 app.include_router(geo_router, prefix="/geo")
+app.include_router(map_router, prefix="/map")
 
